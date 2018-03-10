@@ -15,7 +15,7 @@ class Mots extends ValueOcc
 {
 
 
-    public Mots(int value, long occurences) {
+    Mots(int value, long occurences) {
         this.value = value;
         this.occurences = occurences;
     }
@@ -36,7 +36,7 @@ class Entry extends ValueOcc
 {
     public ArrayList<Mots> follow;
 
-    public Entry(int value, long occurences) {
+    Entry(int value, long occurences) {
         this.value = value;
         this.occurences = occurences;
         follow = new ArrayList<>();
@@ -71,16 +71,26 @@ class Entry extends ValueOcc
 }
 
 public class Main {
-    public static final ArrayList<String> dictionary = new ArrayList<>();
+
+    private static final ArrayList<String> dictionary = new ArrayList<>();
     private static final Vector<String> printQueue = new Vector<>();
-    private static PrintEngine print;
     private static ArrayList<Entry> wordAndFollow;
     private static boolean folderInputMode = false;
     private static String path="";
     private static final String dictionaryName="dictionary.txt";
     public static final int maxPropositions = 4;
+    private static long numberOfFiles=0;
+    private static long fileSize=0;
+    private static long numberOfFailures=0;
+    private static long endTime;
+    private static long launchTime;
 
     public static void main(String[] args) {
+        wordAndFollow = new ArrayList<>();
+        PrintEngine print = new PrintEngine();
+        print.start();
+        printWelcome();
+        launchTime = System.currentTimeMillis();
         if(args.length < 1)
         {
             System.err.println("Not enough arguments");
@@ -116,9 +126,7 @@ public class Main {
             return;
         }
 
-        wordAndFollow = new ArrayList<>();
-        print = new PrintEngine();
-        print.start();
+
 
         wordAndFollow.add(new Entry(0, 0));
         dictionary.add("");
@@ -159,7 +167,8 @@ public class Main {
                 e.printStackTrace();
             }
         }
-
+        endTime = System.currentTimeMillis();
+        printStats();
         addPrint("\nWriting results... ");
         try(BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(new FileOutputStream("dictionnaryFinal.txt"))))
         {
@@ -195,7 +204,25 @@ public class Main {
 
     }
 
-    public static String prepareLine(String line)
+    private static void printStats() {
+        addPrint("----------------\n");
+        addPrint("Processed "+ numberOfFiles + " files in "+((endTime-launchTime)/60000)+"min "+(((endTime-launchTime)/1000)%60)+"s\n");
+        addPrint("Size of all files : "+ (fileSize>1000000 ? fileSize/1000000 + "MB" : fileSize/1000 + "KB")+"\n");
+        addPrint("Number of failures : " + numberOfFailures + String.format(" (%.2f%%)\n", ((double)numberOfFailures)/numberOfFiles));
+        long memory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+        addPrint("Using : "+((memory > 1000000) ? memory/1000000 + "M" : memory/1000 + "K") + "B of memory\n");
+        addPrint("----------------\n");
+    }
+
+    private static void printWelcome()
+    {
+        addPrint("----------------\n");
+        addPrint("CORPUS ANALYZER\n");
+        addPrint("----------------\n");
+    }
+
+
+    private static String prepareLine(String line)
     {
         line = Normalizer.normalize(line, Normalizer.Form.NFD);
         line = line.replaceAll("[\\u0300-\\u036F]", "");
@@ -203,12 +230,14 @@ public class Main {
         return line;
     }
 
-    public static void processFile(File file) throws IOException
+    private static void processFile(File file) throws IOException
     {
 
-        if(file != null && file.exists() && file.getName().contains(".txt"))
+        if(file != null && file.exists() && !file.isDirectory())
         {
-            addPrint("Processing "+file.getName()+"... ");
+            numberOfFiles++;
+            fileSize+=file.length();
+            addPrint(String.format("%-100s", "Processing "+file.getName()+"... "));
             BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8));
             String line, related;
             while((line = br.readLine())!= null)
@@ -221,6 +250,7 @@ public class Main {
                     String[] words = sentence.split("[-, \t\"'«»’–)(]");
                     for(String word : words)
                     {
+                        word = sanitize(word);
                         if(addWord(word, related))
                         {
                             related=word;
@@ -232,22 +262,29 @@ public class Main {
         }
     }
 
-    public static void processFolder(String folderPath) throws IOException
+    private static void processFolder(String folderPath) throws IOException
     {
         File folder = new File(folderPath);
         if(folder.exists())
         {
-            File[] files = folder.listFiles();
-            if(files != null)
+            File[] files = folder.listFiles(pathname -> {
+                String name = pathname.getName().toLowerCase();
+                return name.endsWith(".txt") && pathname.isFile();
+            });
+            if(files != null && files.length > 0)
             {
+                int index=1;
+                String format = "[%0"+((int)(Math.floor(Math.log10(files.length))+1))+"d/"+files.length+"] ";
                 for(File file : files)
                 {
                     try
                     {
+                        addPrint(String.format(format, index++));
                         processFile(file);
 
                     }catch(IOException e)
                     {
+                        numberOfFailures++;
                         addPrint("Failed\n");
                     }
                 }
@@ -256,12 +293,12 @@ public class Main {
             throw new FileNotFoundException("Folder doesn't exist");
     }
 
-    public static String sanitize(String word)
+    private static String sanitize(String word)
     {
         return word.replaceAll("[^A-Z]+", "");
     }
 
-    public static boolean addWord(String word, String related)
+    private static boolean addWord(String word, String related)
     {
         int relatedPos = firstEntry(related, wordAndFollow);
         int wordPos = firstEntry(word, wordAndFollow);
@@ -281,7 +318,7 @@ public class Main {
         }
         return false;
     }
-    static void addPrint(String str)
+    private static void addPrint(String str)
     {
         synchronized (printQueue)
         {
@@ -291,7 +328,7 @@ public class Main {
 
     }
 
-    public static int firstEntry(String word, ArrayList<Entry> list)
+    private static int firstEntry(String word, ArrayList<Entry> list)
     {
         int result = -1;
         int size = list.size();
@@ -319,7 +356,7 @@ public class Main {
         return result;
     }
 
-    public static int insertPos(String word, ArrayList<Mots> list)
+    private static int insertPos(String word, ArrayList<Mots> list)
     {
         if(list.size() == 0)
             return 0;
@@ -383,7 +420,7 @@ public class Main {
             }
         }
 
-        public void termination()
+        void termination()
         {
             terminate=true;
         }
