@@ -302,7 +302,7 @@ public class Main {
     {
         int relatedPos = firstEntry(related, wordAndFollow);
         int wordPos = firstEntry(word, wordAndFollow);
-        if(word.length()>2 && relatedPos!=-1 && wordPos!=-1) //In the dictionnary
+        if(word.length()>1 && relatedPos!=-1 && wordPos!=-1) //In the dictionnary
         {
             Entry entry = wordAndFollow.get(relatedPos);
             int insertPosition = insertPos(word, entry.follow);
