@@ -5,58 +5,56 @@ import java.nio.charset.StandardCharsets;
 import java.text.Normalizer;
 import java.util.*;
 
-
-class Mots
+class ValueOcc
 {
-    public String value;
+    public int value;
     public long occurences;
+}
 
-    public Mots(String value, long occurences) {
+class Mots extends ValueOcc
+{
+
+
+    public Mots(int value, long occurences) {
         this.value = value;
         this.occurences = occurences;
     }
 
     @Override
     public boolean equals(Object obj) {
-        return obj instanceof Mots && ((Mots) obj).value.equals(value);
+        return obj instanceof Mots && ((Mots) obj).value == value;
     }
 
     @Override
     public String toString()
     {
-        return value;
+        return Main.getWord(value);
     }
 }
 
-class Entry
+class Entry extends ValueOcc
 {
-    public String value;
-    public long occurences;
-    public HashMap<String, Mots> follow;
+    public ArrayList<Mots> follow;
 
-    public Entry(String value, long occurences) {
+    public Entry(int value, long occurences) {
         this.value = value;
         this.occurences = occurences;
-        follow = new HashMap<>();
+        follow = new ArrayList<>();
     }
     @Override
     public boolean equals(Object obj) {
-        return obj instanceof Entry && ((Entry) obj).value.equals(value);
+        return obj instanceof Entry && ((Entry) obj).value == value;
     }
 
     @Override
     public String toString() {
-        return value + "\t" + occurences + "\t" + followToString();
+        return Main.getWord(value) + "\t" + occurences + "\t" + followToString();
     }
 
     public String followToString()
     {
         StringBuilder sb = new StringBuilder();
-        ArrayList<Mots> arr = new ArrayList<>();
-        for(String key : follow.keySet())
-        {
-            arr.add(follow.get(key));
-        }
+        ArrayList<Mots> arr = new ArrayList<>(follow);
         arr.sort((m,n)->{
             if(m.occurences > n.occurences)
                 return -1;
@@ -73,9 +71,10 @@ class Entry
 }
 
 public class Main {
+    public static final ArrayList<String> dictionary = new ArrayList<>();
     private static final Vector<String> printQueue = new Vector<>();
     private static PrintEngine print;
-    private static HashMap<String, Entry> wordAndFollow;
+    private static ArrayList<Entry> wordAndFollow;
     private static boolean folderInputMode = false;
     private static String path="";
     private static final String dictionaryName="dictionary.txt";
@@ -117,14 +116,16 @@ public class Main {
             return;
         }
 
-        wordAndFollow = new HashMap<>();
+        wordAndFollow = new ArrayList<>();
         print = new PrintEngine();
         print.start();
 
-
+        wordAndFollow.add(new Entry(0, 0));
+        dictionary.add("");
         try(BufferedReader br = new BufferedReader(new InputStreamReader(Main.class.getClassLoader().getResourceAsStream(dictionaryName)))){
             String line;
             Integer frequencie;
+            int index=1;
             while((line = br.readLine() )!= null)
             {
                 String[] values = line.split("\t");
@@ -135,13 +136,14 @@ public class Main {
                 {
                     frequencie=1;
                 }
-                Entry entry = new Entry(values[0], frequencie);
-                wordAndFollow.put(entry.value, entry);
+                dictionary.add(values[0]);
+                Entry entry = new Entry(index++, frequencie);
+                wordAndFollow.add(entry);
             }
         } catch(IOException e) {
             e.printStackTrace();
         }
-        wordAndFollow.put("", new Entry("", 0));
+
         if(folderInputMode)
         {
             try {
@@ -161,21 +163,15 @@ public class Main {
         addPrint("\nWriting results... ");
         try(BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(new FileOutputStream("dictionnaryFinal.txt"))))
         {
-            if(wordAndFollow.containsKey(""))
+            int emptyEntry = firstEntry("", wordAndFollow);
+            if(emptyEntry != -1)
             {
-                Entry entry = wordAndFollow.get("");
+                Entry entry = wordAndFollow.get(emptyEntry);
                 bw.write(entry.followToString());
                 bw.newLine();
-                wordAndFollow.remove("");
+                wordAndFollow.remove(emptyEntry);
             }
-
-            ArrayList<Entry> arr = new ArrayList<>();
-            for(String key : wordAndFollow.keySet())
-            {
-                arr.add(wordAndFollow.get(key));
-            }
-            arr.sort(Comparator.comparing(a -> a.value));
-            for (Entry anArr : arr) {
+            for (Entry anArr : wordAndFollow) {
                 bw.write(anArr.toString());
                 bw.newLine();
             }
@@ -260,17 +256,26 @@ public class Main {
             throw new FileNotFoundException("Folder doesn't exist");
     }
 
+    public static String sanitize(String word)
+    {
+        return word.replaceAll("[^A-Z]+", "");
+    }
+
     public static boolean addWord(String word, String related)
     {
-        if(word.length()>2 && wordAndFollow.containsKey(related) && wordAndFollow.containsKey(word)) //In the dictionnary
+        int relatedPos = firstEntry(related, wordAndFollow);
+        int wordPos = firstEntry(word, wordAndFollow);
+        if(word.length()>2 && relatedPos!=-1 && wordPos!=-1) //In the dictionnary
         {
-            Entry entry = wordAndFollow.get(related);
-            if(entry.follow.containsKey(word))
+            Entry entry = wordAndFollow.get(relatedPos);
+            int insertPosition = insertPos(word, entry.follow);
+            int size = entry.follow.size();
+            if(size > 0 && insertPosition<size && entry.follow.get(insertPosition).value == wordPos)
             {
-                entry.follow.get(word).occurences++;
+                entry.follow.get(insertPosition).occurences++;
             }else
             {
-                entry.follow.put(word, new Mots(word, 1));
+                entry.follow.add(insertPosition, new Mots(wordPos, 1));
             }
             return true;
         }
@@ -284,6 +289,69 @@ public class Main {
             printQueue.notifyAll();
         }
 
+    }
+
+    public static int firstEntry(String word, ArrayList<Entry> list)
+    {
+        int result = -1;
+        int size = list.size();
+        int min=0, max = size;
+
+        while(min <= max)
+        {
+            int mid = min+(max-min)/2;
+            if(mid >= size)
+                return -1;
+            String wordMid = dictionary.get(list.get(mid).value);
+            int value = wordMid.compareTo(word);
+            if(value == 0)
+            {
+                result=mid;
+                max=mid-1;
+            }else if(value > 0)
+            {
+                max = mid-1;
+            }else
+            {
+                min = mid+1;
+            }
+        }
+        return result;
+    }
+
+    public static int insertPos(String word, ArrayList<Mots> list)
+    {
+        if(list.size() == 0)
+            return 0;
+        int result = 0;
+        int size = list.size();
+        int min=0, max = size;
+        while(min <= max)
+        {
+            int mid = min+((max-min)/2);
+            if(mid>=size)
+                return size;
+            String wordMid = dictionary.get(list.get(mid).value);
+            int value = wordMid.compareTo(word);
+            if(value == 0)
+            {
+                result=mid;
+                max=mid-1;
+            }else if(value > 0)
+            {
+                max = mid-1;
+            }else
+            {
+                min = mid+1;
+                result = min;
+            }
+        }
+        return result;
+    }
+
+    public static String getWord(int i)
+    {
+        return dictionary.get(i);
     }
 
     public static class PrintEngine extends Thread {
