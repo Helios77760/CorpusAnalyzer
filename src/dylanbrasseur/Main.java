@@ -76,6 +76,8 @@ public class Main {
     private static final Vector<String> printQueue = new Vector<>();
     private static ArrayList<Entry> wordAndFollow;
     private static boolean folderInputMode = false;
+    private static boolean generatesOwnDictionnary = false;
+    private static boolean advanced = false;
     private static String path="";
     private static final String dictionaryName="dictionary.txt";
     public static final int maxPropositions = 4;
@@ -86,6 +88,7 @@ public class Main {
     private static long launchTime;
 
     public static void main(String[] args) {
+
         wordAndFollow = new ArrayList<>();
         PrintEngine print = new PrintEngine();
         print.start();
@@ -111,6 +114,12 @@ public class Main {
                         }else if(str.charAt(1) == 'r')
                         {
                             folderInputMode=true;
+                        }else if(str.charAt(1) == 'd')
+                        {
+                            generatesOwnDictionnary = true;
+                        }else if(str.charAt(1) == 'a')
+                        {
+                            advanced = true;
                         }
                     }
                 }else
@@ -140,6 +149,8 @@ public class Main {
                 try
                 {
                     frequencie = Integer.parseInt(values[1]);
+                    if(frequencie<=0)
+                        frequencie=1;
                 }catch(NumberFormatException e)
                 {
                     frequencie=1;
@@ -152,43 +163,59 @@ public class Main {
             e.printStackTrace();
         }
 
-        if(folderInputMode)
+        if(generatesOwnDictionnary)
         {
-            try {
-                processFolder(path);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }else
-        {
-            try {
-                processFile(new File(path));
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-        endTime = System.currentTimeMillis();
-        printStats();
-        addPrint("\nWriting results... ");
-        try(BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(new FileOutputStream("dictionnaryFinal.txt"))))
-        {
-            int emptyEntry = firstEntry("", wordAndFollow);
-            if(emptyEntry != -1)
-            {
-                Entry entry = wordAndFollow.get(emptyEntry);
-                bw.write(entry.followToString());
-                bw.newLine();
-                wordAndFollow.remove(emptyEntry);
-            }
-            for (Entry anArr : wordAndFollow) {
-                bw.write(anArr.toString());
-                bw.newLine();
-            }
-            addPrint("Done\n");
+            resetStats();
+            generateDictionary();
+            endTime = System.currentTimeMillis();
+            printStats();
+            saveDictionary();
 
-        } catch (IOException e) {
-            addPrint("Failed\n");
-            e.printStackTrace();
+        }
+        if(advanced)
+        {
+            resetStats();
+            addPrint("\n----------------\n");
+            addPrint("Processing data\n");
+            addPrint("----------------\n\n");
+            if(folderInputMode)
+            {
+                try {
+                    processFolder(path);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }else
+            {
+                try {
+                    processFile(new File(path));
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+            endTime = System.currentTimeMillis();
+            printStats();
+            addPrint("\nWriting results... ");
+            try(BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(new FileOutputStream("dictionnaryFinal.txt"))))
+            {
+                int emptyEntry = firstEntry("", wordAndFollow);
+                if(emptyEntry != -1)
+                {
+                    Entry entry = wordAndFollow.get(emptyEntry);
+                    bw.write(entry.followToString());
+                    bw.newLine();
+                    wordAndFollow.remove(emptyEntry);
+                }
+                for (Entry anArr : wordAndFollow) {
+                    bw.write(anArr.toString());
+                    bw.newLine();
+                }
+                addPrint("Done\n");
+
+            } catch (IOException e) {
+                addPrint("Failed\n");
+                e.printStackTrace();
+            }
         }
 
         try {
@@ -201,6 +228,138 @@ public class Main {
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
+
+    }
+
+    private static void resetStats()
+    {
+        numberOfFiles=0;
+        fileSize=0;
+        numberOfFailures=0;
+        endTime=System.currentTimeMillis();
+        launchTime=System.currentTimeMillis();
+    }
+
+    private static void saveDictionary() {
+        addPrint("\nWriting results... ");
+        try(BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(new FileOutputStream("new_" + dictionaryName))))
+        {
+            for (Entry word : wordAndFollow) {
+                bw.write(dictionary.get(word.value) + "\t"+word.occurences);
+                bw.newLine();
+            }
+            addPrint("Done\n\n");
+
+        } catch (IOException e) {
+            addPrint("Failed\n\n");
+            e.printStackTrace();
+        }
+    }
+
+    private static void generateDictionary() {
+        addPrint("\n----------------\n");
+        addPrint("Generating dictionnary from files...\n");
+        addPrint("----------------\n\n");
+        for(Entry e : wordAndFollow)
+        {
+            e.occurences*=10000;
+        }
+        if(folderInputMode)
+        {
+            try {
+                dictionaryProcessFolder(path);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }else
+        {
+            try {
+                dictionaryProcessFile(new File(path));
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        addPrint("\nFile Processing done, cleaning up the dictionnary... \n");
+        for(int i=0;i<wordAndFollow.size();)
+        {
+            if(wordAndFollow.get(i).occurences < 10000)
+            {
+                dictionary.remove(i);
+                wordAndFollow.remove(i);
+            }else
+            {
+                wordAndFollow.get(i).value=i;
+                wordAndFollow.get(i).occurences/=10000;
+                i++;
+            }
+        }
+    }
+
+    private static void dictionaryProcessFile(File file) throws IOException
+    {
+
+        if(file != null && file.exists() && !file.isDirectory())
+        {
+            numberOfFiles++;
+            fileSize+=file.length();
+            addPrint(String.format("%-100s", "Processing "+file.getName()+"... "));
+            BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8));
+            String line;
+            while((line = br.readLine())!= null)
+            {
+                line = prepareLine(line);
+                String[] words = line.split("[-*.?!:;, \t\"'«»’–)(]");
+                for(String word : words)
+                {
+                    word = sanitize(word);
+                    if(word.length() > 1)
+                    {
+                        int index = insertPosDictionary(word);
+                        if(index < dictionary.size() && dictionary.get(index).equals(word))
+                        {
+                            wordAndFollow.get(index).occurences++;
+                        }else
+                        {
+                            dictionary.add(index, word);
+                            wordAndFollow.add(index, new Entry(index, 1));
+                        }
+                    }
+                }
+            }
+            addPrint("OK\n");
+        }
+    }
+
+    private static void dictionaryProcessFolder(String folderPath) throws IOException
+    {
+        File folder = new File(folderPath);
+
+        if(folder.exists())
+        {
+            File[] files = folder.listFiles(pathname -> {
+                String name = pathname.getName().toLowerCase();
+                return name.endsWith(".txt") && pathname.isFile();
+            });
+            if(files != null && files.length > 0)
+            {
+                String format = "[%0"+((int)(Math.floor(Math.log10(files.length))+1))+"d/"+files.length+"] ";
+                for(File file : files)
+                {
+                    try
+                    {
+                        addPrint(String.format(format, numberOfFiles+1));
+                        dictionaryProcessFile(file);
+
+                    }catch(IOException e)
+                    {
+                        numberOfFailures++;
+                        addPrint("Failed\n");
+                    }
+                }
+            }
+        }else
+            throw new FileNotFoundException("Folder doesn't exist");
+
 
     }
 
@@ -228,6 +387,36 @@ public class Main {
         line = line.replaceAll("[\\u0300-\\u036F]", "");
         line = line.toUpperCase();
         return line;
+    }
+
+    private static int insertPosDictionary(String word)
+    {
+        if(dictionary.size() == 0)
+            return 0;
+        int result = 0;
+        int size = dictionary.size();
+        int min=0, max = size;
+        while(min <= max)
+        {
+            int mid = min+((max-min)/2);
+            if(mid>=size)
+                return size;
+            String wordMid = dictionary.get(mid);
+            int value = wordMid.compareTo(word);
+            if(value == 0)
+            {
+                result=mid;
+                max=mid-1;
+            }else if(value > 0)
+            {
+                max = mid-1;
+            }else
+            {
+                min = mid+1;
+                result = min;
+            }
+        }
+        return result;
     }
 
     private static void processFile(File file) throws IOException
@@ -273,13 +462,12 @@ public class Main {
             });
             if(files != null && files.length > 0)
             {
-                int index=1;
                 String format = "[%0"+((int)(Math.floor(Math.log10(files.length))+1))+"d/"+files.length+"] ";
                 for(File file : files)
                 {
                     try
                     {
-                        addPrint(String.format(format, index++));
+                        addPrint(String.format(format, numberOfFiles++));
                         processFile(file);
 
                     }catch(IOException e)
