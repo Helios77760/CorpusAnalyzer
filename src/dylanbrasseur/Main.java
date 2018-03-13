@@ -145,6 +145,7 @@ public class Main {
         dictionary.add("");
         boolean dictionaryLoaded;
         try(BufferedReader br = new BufferedReader(new InputStreamReader(useNewDictionnary ? new FileInputStream(dictionaryName) : Main.class.getClassLoader().getResourceAsStream(dictionaryName)))){
+            addPrint("Using " + (useNewDictionnary ? "external" : "internal") + " dictionary...\n");
             String line;
             Integer frequencie;
             int index=1;
