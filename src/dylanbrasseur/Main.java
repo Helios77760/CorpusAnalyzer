@@ -80,7 +80,7 @@ public class Main {
     private static boolean advanced = false;
     private static String path="";
     private static final String dictionaryName="dictionary.txt";
-    public static final int maxPropositions = 4;
+    public static final int maxPropositions = 10;
     private static long numberOfFiles=0;
     private static long fileSize=0;
     private static long numberOfFailures=0;
@@ -314,10 +314,10 @@ public class Main {
 
     private static void dictionaryProcessFile(File file) throws IOException
     {
-
+        numberOfFiles++;
         if(file != null && file.exists() && !file.isDirectory())
         {
-            numberOfFiles++;
+
             fileSize+=file.length();
             addPrint(String.format("%-100s", "Processing "+file.getName()+"... "));
             BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8));
@@ -438,10 +438,9 @@ public class Main {
 
     private static void processFile(File file) throws IOException
     {
-
+        numberOfFiles++;
         if(file != null && file.exists() && !file.isDirectory())
         {
-            numberOfFiles++;
             fileSize+=file.length();
             addPrint(String.format("%-100s", "Processing "+file.getName()+"... "));
             BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8));
@@ -484,7 +483,7 @@ public class Main {
                 {
                     try
                     {
-                        addPrint(String.format(format, numberOfFiles++));
+                        addPrint(String.format(format, numberOfFiles+1));
                         processFile(file);
 
                     }catch(IOException e)
