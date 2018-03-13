@@ -86,6 +86,7 @@ public class Main {
     private static long numberOfFailures=0;
     private static long endTime;
     private static long launchTime;
+    private static boolean useNewDictionnary=false;
 
     public static void main(String[] args) {
 
@@ -120,6 +121,9 @@ public class Main {
                         }else if(str.charAt(1) == 'a')
                         {
                             advanced = true;
+                        }else if(str.charAt(1) == 'n')
+                        {
+                            useNewDictionnary=true;
                         }
                     }
                 }else
@@ -139,7 +143,8 @@ public class Main {
 
         wordAndFollow.add(new Entry(0, 0));
         dictionary.add("");
-        try(BufferedReader br = new BufferedReader(new InputStreamReader(Main.class.getClassLoader().getResourceAsStream(dictionaryName)))){
+        boolean dictionaryLoaded;
+        try(BufferedReader br = new BufferedReader(new InputStreamReader(useNewDictionnary ? new FileInputStream(dictionaryName) : Main.class.getClassLoader().getResourceAsStream(dictionaryName)))){
             String line;
             Integer frequencie;
             int index=1;
@@ -159,64 +164,72 @@ public class Main {
                 Entry entry = new Entry(index++, frequencie);
                 wordAndFollow.add(entry);
             }
+            dictionaryLoaded=index > 1;
         } catch(IOException e) {
             e.printStackTrace();
+            dictionaryLoaded=false;
         }
-
-        if(generatesOwnDictionnary)
+        if(dictionaryLoaded)
         {
-            resetStats();
-            generateDictionary();
-            endTime = System.currentTimeMillis();
-            printStats();
-            saveDictionary();
+            if(generatesOwnDictionnary)
+            {
+                resetStats();
+                generateDictionary();
+                endTime = System.currentTimeMillis();
+                printStats();
+                saveDictionary();
 
-        }
-        if(advanced)
-        {
-            resetStats();
-            addPrint("\n----------------\n");
-            addPrint("Processing data\n");
-            addPrint("----------------\n\n");
-            if(folderInputMode)
-            {
-                try {
-                    processFolder(path);
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }else
-            {
-                try {
-                    processFile(new File(path));
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
             }
-            endTime = System.currentTimeMillis();
-            printStats();
-            addPrint("\nWriting results... ");
-            try(BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(new FileOutputStream("dictionnaryFinal.txt"))))
+            if(advanced)
             {
-                int emptyEntry = firstEntry("", wordAndFollow);
-                if(emptyEntry != -1)
+                resetStats();
+                addPrint("\n----------------\n");
+                addPrint("Processing data\n");
+                addPrint("----------------\n\n");
+                if(folderInputMode)
                 {
-                    Entry entry = wordAndFollow.get(emptyEntry);
-                    bw.write(entry.followToString());
-                    bw.newLine();
-                    wordAndFollow.remove(emptyEntry);
+                    try {
+                        processFolder(path);
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }else
+                {
+                    try {
+                        processFile(new File(path));
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
                 }
-                for (Entry anArr : wordAndFollow) {
-                    bw.write(anArr.toString());
-                    bw.newLine();
-                }
-                addPrint("Done\n");
+                endTime = System.currentTimeMillis();
+                printStats();
+                addPrint("\nWriting results... ");
+                try(BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(new FileOutputStream("dictionnaryFinal.txt"))))
+                {
+                    int emptyEntry = firstEntry("", wordAndFollow);
+                    if(emptyEntry != -1)
+                    {
+                        Entry entry = wordAndFollow.get(emptyEntry);
+                        bw.write(entry.followToString());
+                        wordAndFollow.remove(emptyEntry);
+                    }
+                    for (Entry anArr : wordAndFollow) {
+                        bw.newLine();
+                        bw.write(anArr.toString());
+                    }
+                    addPrint("Done\n");
 
-            } catch (IOException e) {
-                addPrint("Failed\n");
-                e.printStackTrace();
+                } catch (IOException e) {
+                    addPrint("Failed\n");
+                    e.printStackTrace();
+                }
             }
+        }else
+        {
+            addPrint("No dictionnary...");
         }
+
+
 
         try {
             print.termination();
@@ -242,11 +255,14 @@ public class Main {
 
     private static void saveDictionary() {
         addPrint("\nWriting results... ");
-        try(BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(new FileOutputStream("new_" + dictionaryName))))
+        try(BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(dictionaryName))))
         {
-            for (Entry word : wordAndFollow) {
-                bw.write(dictionary.get(word.value) + "\t"+word.occurences);
-                bw.newLine();
+            long size = wordAndFollow.size();
+            for (int i = 0; i < size; i++) {
+                Entry word = wordAndFollow.get(i);
+                bw.write(dictionary.get(word.value) + "\t" + word.occurences);
+                if(i<size-1)
+                    bw.newLine();
             }
             addPrint("Done\n\n");
 
