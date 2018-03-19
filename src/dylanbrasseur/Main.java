@@ -13,8 +13,6 @@ class ValueOcc
 
 class Mots extends ValueOcc
 {
-
-
     Mots(int value, long occurences) {
         this.value = value;
         this.occurences = occurences;
@@ -28,17 +26,19 @@ class Mots extends ValueOcc
     @Override
     public String toString()
     {
-        return Main.getWord(value);
+        return Main.getAccented(value);
     }
 }
 
 class Entry extends ValueOcc
 {
     public ArrayList<Mots> follow;
+    public int accented;
 
-    Entry(int value, long occurences) {
+    Entry(int value, int accented, long occurences) {
         this.value = value;
         this.occurences = occurences;
+        this.accented = accented;
         follow = new ArrayList<>();
     }
     @Override
@@ -48,7 +48,7 @@ class Entry extends ValueOcc
 
     @Override
     public String toString() {
-        return Main.getWord(value) + "\t" + occurences + "\t" + followToString();
+        return Main.getWord(value) + "\t" + Main.getAccented(accented)+ "\t" + occurences + "\t" + followToString();
     }
 
     public String followToString()
@@ -73,6 +73,7 @@ class Entry extends ValueOcc
 public class Main {
 
     private static final ArrayList<String> dictionary = new ArrayList<>();
+    private static final ArrayList<String> accentDictionnary = new ArrayList<>();
     private static final Vector<String> printQueue = new Vector<>();
     private static ArrayList<Entry> wordAndFollow;
     private static boolean folderInputMode = false;
@@ -141,8 +142,9 @@ public class Main {
 
 
 
-        wordAndFollow.add(new Entry(0, 0));
+        wordAndFollow.add(new Entry(0, 0, 0));
         dictionary.add("");
+        accentDictionnary.add("");
         boolean dictionaryLoaded;
         try(BufferedReader br = new BufferedReader(new InputStreamReader(useNewDictionnary ? new FileInputStream(dictionaryName) : Main.class.getClassLoader().getResourceAsStream(dictionaryName)))){
             addPrint("Using " + (useNewDictionnary ? "external" : "internal") + " dictionary...\n");
@@ -154,7 +156,7 @@ public class Main {
                 String[] values = line.split("\t");
                 try
                 {
-                    frequencie = Integer.parseInt(values[1]);
+                    frequencie = Integer.parseInt(values[2]);
                     if(frequencie<=0)
                         frequencie=1;
                 }catch(NumberFormatException e)
@@ -162,7 +164,9 @@ public class Main {
                     frequencie=1;
                 }
                 dictionary.add(values[0]);
-                Entry entry = new Entry(index++, frequencie);
+                accentDictionnary.add(values[1]);
+                Entry entry = new Entry(index, index, frequencie);
+                index++;
                 wordAndFollow.add(entry);
             }
             dictionaryLoaded=index > 1;
@@ -261,7 +265,7 @@ public class Main {
             long size = wordAndFollow.size();
             for (int i = 0; i < size; i++) {
                 Entry word = wordAndFollow.get(i);
-                bw.write(dictionary.get(word.value) + "\t" + word.occurences);
+                bw.write(dictionary.get(word.value)+ "\t" + accentDictionnary.get(word.value) + "\t" + word.occurences);
                 if(i<size-1)
                     bw.newLine();
             }
@@ -302,6 +306,7 @@ public class Main {
             if(wordAndFollow.get(i).occurences < 10000)
             {
                 dictionary.remove(i);
+                accentDictionnary.remove(i);
                 wordAndFollow.remove(i);
             }else
             {
@@ -324,10 +329,10 @@ public class Main {
             String line;
             while((line = br.readLine())!= null)
             {
-                line = prepareLine(line);
                 String[] words = line.split("[-*.?!:;, \t\"'«»’–)(]");
                 for(String word : words)
                 {
+                    String accented = word;
                     word = sanitize(word);
                     if(word.length() > 1)
                     {
@@ -338,7 +343,8 @@ public class Main {
                         }else
                         {
                             dictionary.add(index, word);
-                            wordAndFollow.add(index, new Entry(index, 1));
+                            accentDictionnary.add(index, accented);
+                            wordAndFollow.add(index, new Entry(index, index,1));
                         }
                     }
                 }
@@ -397,15 +403,6 @@ public class Main {
         addPrint("----------------\n");
     }
 
-
-    private static String prepareLine(String line)
-    {
-        line = Normalizer.normalize(line, Normalizer.Form.NFD);
-        line = line.replaceAll("[\\u0300-\\u036F]", "");
-        line = line.toUpperCase();
-        return line;
-    }
-
     private static int insertPosDictionary(String word)
     {
         if(dictionary.size() == 0)
@@ -447,7 +444,6 @@ public class Main {
             String line, related;
             while((line = br.readLine())!= null)
             {
-                line = prepareLine(line);
                 String[] sentences = line.split("[.?!:;]");
                 for(String sentence : sentences)
                 {
@@ -455,8 +451,9 @@ public class Main {
                     String[] words = sentence.split("[-, \t\"'«»’–)(]");
                     for(String word : words)
                     {
+                        String accentedWord = word.toUpperCase().replaceAll("[^\\p{IsAlphabetic}]", "");
                         word = sanitize(word);
-                        if(addWord(word, related))
+                        if(addWord(word, accentedWord, related))
                         {
                             related=word;
                         }
@@ -499,17 +496,20 @@ public class Main {
 
     private static String sanitize(String word)
     {
+        word = Normalizer.normalize(word, Normalizer.Form.NFD);
+        word = word.replaceAll("[\\u0300-\\u036F]", "");
+        word = word.toUpperCase();
         return word.replaceAll("[^A-Z]+", "");
     }
 
-    private static boolean addWord(String word, String related)
+    private static boolean addWord(String word, String accented, String related)
     {
         int relatedPos = firstEntry(related, wordAndFollow);
         int wordPos = firstEntry(word, wordAndFollow);
         if(word.length()>1 && relatedPos!=-1 && wordPos!=-1) //In the dictionnary
         {
             Entry entry = wordAndFollow.get(relatedPos);
-            int insertPosition = insertPos(word, entry.follow);
+            int insertPosition = insertPos(accented, entry.follow);
             int size = entry.follow.size();
             if(size > 0 && insertPosition<size && entry.follow.get(insertPosition).value == wordPos)
             {
@@ -593,6 +593,11 @@ public class Main {
     public static String getWord(int i)
     {
         return dictionary.get(i);
+    }
+
+    public static String getAccented(int i)
+    {
+        return accentDictionnary.get(i);
     }
 
     public static class PrintEngine extends Thread {
